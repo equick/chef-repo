@@ -1,0 +1,854 @@
+
+=set up a node
+
+knife bootstrap training --sudo -x chef -P chef -N "node1"
+
+bash-4.2$ knife bootstrap training --sudo -x chef -P chef -N "node1"
+Connecting to training
+training Installing Chef Client...
+training --2015-01-19 06:24:30--  https://www.opscode.com/chef/install.sh
+training Resolving www.opscode.com... 184.106.28.90
+training Connecting to www.opscode.com|184.106.28.90|:443... connected.
+training HTTP request sent, awaiting response... 200 OK
+training Length: 18285 (18K) [application/x-sh]
+training Saving to: `STDOUT'
+training 
+100%[======================================>] 18,285      --.-K/s   in 0.001s  
+training 
+training 2015-01-19 06:24:31 (14.2 MB/s) - written to stdout [18285/18285]
+training 
+training Downloading Chef 12 for el...
+training downloading https://www.opscode.com/chef/metadata?v=12&prerelease=false&nightlies=false&p=el&pv=6&m=x86_64
+training   to file /tmp/install.sh.45476/metadata.txt
+training trying wget...
+training url	https://opscode-omnibus-packages.s3.amazonaws.com/el/6/x86_64/chef-12.0.3-1.x86_64.rpm
+training md5	3634d1a3b6ae2e5977361075da0f44cc
+training sha256	0ec6162b9d0ca2b2016ff02781d84905f712d64c7a81d01b0df88f977832f310
+training downloaded metadata file looks valid...
+training downloading https://opscode-omnibus-packages.s3.amazonaws.com/el/6/x86_64/chef-12.0.3-1.x86_64.rpm
+training   to file /tmp/install.sh.45476/chef-12.0.3-1.x86_64.rpm
+training trying wget...
+training Comparing checksum with sha256sum...
+training Installing Chef 12
+training installing with rpm...
+training warning: /tmp/install.sh.45476/chef-12.0.3-1.x86_64.rpm: Header V4 DSA/SHA1 Signature, key ID 83ef826a: NOKEY
+training Preparing...                ########################################### [100%]
+training    1:chef                   ########################################### [100%]
+training Thank you for installing Chef!
+training Starting first Chef Client run...
+training Starting Chef Client, version 12.0.3
+training Creating a new client identity for node1 using the validator key.
+training resolving cookbooks for run list: []
+training Synchronizing Cookbooks:
+training Compiling Cookbooks...
+training [2015-01-19T06:24:47-05:00] WARN: Node node1 has an empty run list.
+training Converging 0 resources
+training 
+training Running handlers:
+training Running handlers complete
+training Chef Client finished, 0/0 resources updated in 4.337906276 seconds
+
+
+bash-4.2$ knife client list
+node1
+quick-validator
+
+
+== After bootstrapping the node you can see this config on the node:
+
+[chef@CentOS63 ~]$ ls /etc/chef
+client.pem  client.rb  first-boot.json  validation.pem
+[chef@CentOS63 ~]$ which chef-client
+/usr/bin/chef-client
+[chef@CentOS63 ~]$ ls -l /usr/bin/chef-client
+lrwxrwxrwx. 1 root root 25 Jan 19 06:30 /usr/bin/chef-client -> /opt/chef/bin/chef-client
+[chef@CentOS63 ~]$ cat /etc/chef/client.rb
+log_location     STDOUT
+chef_server_url  "https://api.opscode.com/organizations/quick"
+validation_client_name "quick-validator"
+# Using default node name (fqdn)
+
+
+== change the node's log level to info
+
+[chef@CentOS63 ~]$ cat /etc/chef/client.rb
+log_level	:info
+log_location     STDOUT
+chef_server_url  "https://api.opscode.com/organizations/quick"
+validation_client_name "quick-validator"
+# Using default node name (fqdn)
+
+
+= create an apache cookbook
+
+bash-4.2$ cdc
+bash-4.2$ knife cookbook create apache
+** Creating cookbook apache in /home/quick/chef-repo/cookbooks
+** Creating README for cookbook: apache
+** Creating CHANGELOG for cookbook: apache
+** Creating metadata for cookbook: apache
+
+== edit default.rb
+
+Edit /home/quick/chef-repo/cookbooks/apache/recipes/default.rb
+
+== add a package resource
+
+package "httpd" do
+	action :install
+end
+
+== add a service resource
+
+service "httpd" do
+        action [ :enable, :start ]
+end
+
+== add a cookbook file resource
+
+cookbook_file "/var/www/html/index.html" do
+        source "index.html"
+        mode "0644"
+end
+
+== add the index.html to upload
+
+$ cat /home/quick/chef-repo/cookbooks/apache/files/default/index.html
+bash-4.2$ cat index.html 
+<html>
+<body>
+	<h1>Hello World</html>
+</body>
+</html>
+
+== now run the upload  to the chef server
+
+bash-4.2$ knife cookbook upload apache
+Uploading apache       [0.1.0]
+Uploaded 1 cookbook.
+
+== add apache recipe to test node's runlist
+
+bash-4.2$ knife node run_list add node1 "recipe[apache]"
+node1:
+  run_list: recipe[apache]
+
+== go to the node and run chef-client manually
+
+[root@CentOS63 .]# chef-client
+job-working-directory: error retrieving current directory: getcwd: cannot access parent directories: No such file or directory
+[2015-01-19T07:35:36-05:00] INFO: Forking chef instance to converge...
+Starting Chef Client, version 12.0.3
+[2015-01-19T07:35:36-05:00] INFO: *** Chef 12.0.3 ***
+[2015-01-19T07:35:36-05:00] INFO: Chef-client pid: 47626
+[2015-01-19T07:35:38-05:00] INFO: Run List is [recipe[apache]]
+[2015-01-19T07:35:38-05:00] INFO: Run List expands to [apache]
+[2015-01-19T07:35:38-05:00] INFO: Starting Chef Run for node1
+[2015-01-19T07:35:38-05:00] INFO: Running start handlers
+[2015-01-19T07:35:38-05:00] INFO: Start handlers complete.
+resolving cookbooks for run list: ["apache"]
+[2015-01-19T07:35:39-05:00] INFO: Loading cookbooks [apache@0.1.0]
+Synchronizing Cookbooks:
+[2015-01-19T07:35:40-05:00] INFO: Storing updated cookbooks/apache/README.md in the cache.
+[2015-01-19T07:35:40-05:00] INFO: Storing updated cookbooks/apache/metadata.rb in the cache.
+[2015-01-19T07:35:40-05:00] INFO: Storing updated cookbooks/apache/files/default/index.html in the cache.
+[2015-01-19T07:35:40-05:00] INFO: Storing updated cookbooks/apache/recipes/default.rb in the cache.
+[2015-01-19T07:35:40-05:00] INFO: Storing updated cookbooks/apache/CHANGELOG.md in the cache.
+  - apache
+Compiling Cookbooks...
+Converging 3 resources
+Recipe: apache::default
+  * yum_package[httpd] action install[2015-01-19T07:35:40-05:00] INFO: Processing yum_package[httpd] action install (apache::default line 10)
+[2015-01-19T07:35:43-05:00] INFO: yum_package[httpd] installing httpd-2.2.15-39.el6.centos from base repository
+
+    - install version 2.2.15-39.el6.centos of package httpd
+  * service[httpd] action enable[2015-01-19T07:35:51-05:00] INFO: Processing service[httpd] action enable (apache::default line 14)
+[2015-01-19T07:35:51-05:00] INFO: service[httpd] enabled
+
+    - enable service service[httpd]
+  * service[httpd] action start[2015-01-19T07:35:51-05:00] INFO: Processing service[httpd] action start (apache::default line 14)
+[2015-01-19T07:35:51-05:00] INFO: service[httpd] started
+
+    - start service service[httpd]
+  * cookbook_file[/var/www/html/index.html] action create[2015-01-19T07:35:51-05:00] INFO: Processing cookbook_file[/var/www/html/index.html] action create (apache::default line 18)
+[2015-01-19T07:35:51-05:00] INFO: cookbook_file[/var/www/html/index.html] created file /var/www/html/index.html
+
+    - create new file /var/www/html/index.html[2015-01-19T07:35:51-05:00] INFO: cookbook_file[/var/www/html/index.html] updated file contents /var/www/html/index.html
+
+    - update content in file /var/www/html/index.html from none to 6ba9ab
+    --- /var/www/html/index.html	2015-01-19 07:35:51.801773940 -0500
+    +++ /var/www/html/.index.html20150119-47626-u0c85w	2015-01-19 07:35:51.801773940 -0500
+    @@ -1 +1,6 @@
+    +<html>
+    +<body>
+    +	<h1>Hello World</html>
+    +</body>
+    +</html>[2015-01-19T07:35:51-05:00] INFO: cookbook_file[/var/www/html/index.html] mode changed to 644
+
+    - change mode from '' to '0644'
+    - restore selinux security context
+[2015-01-19T07:35:52-05:00] INFO: Chef Run complete in 13.564438338 seconds
+
+Running handlers:
+[2015-01-19T07:35:52-05:00] INFO: Running report handlers
+Running handlers complete
+[2015-01-19T07:35:52-05:00] INFO: Report handlers complete
+Chef Client finished, 4/4 resources updated in 16.254618341 seconds
+[2015-01-19T07:35:52-05:00] INFO: Sending resource update report (run-id: 4e8b8e46-0a82-408b-ad5e-a467999038e5)
+
+==run chef-client again to see resources are already updated
+
+[root@CentOS63 .]# chef-client
+job-working-directory: error retrieving current directory: getcwd: cannot access parent directories: No such file or directory
+[2015-01-19T07:42:14-05:00] INFO: Forking chef instance to converge...
+Starting Chef Client, version 12.0.3
+[2015-01-19T07:42:14-05:00] INFO: *** Chef 12.0.3 ***
+[2015-01-19T07:42:14-05:00] INFO: Chef-client pid: 47945
+[2015-01-19T07:42:16-05:00] INFO: Run List is [recipe[apache]]
+[2015-01-19T07:42:16-05:00] INFO: Run List expands to [apache]
+[2015-01-19T07:42:16-05:00] INFO: Starting Chef Run for node1
+[2015-01-19T07:42:16-05:00] INFO: Running start handlers
+[2015-01-19T07:42:16-05:00] INFO: Start handlers complete.
+resolving cookbooks for run list: ["apache"]
+[2015-01-19T07:42:17-05:00] INFO: Loading cookbooks [apache@0.1.0]
+Synchronizing Cookbooks:
+  - apache
+Compiling Cookbooks...
+Converging 3 resources
+Recipe: apache::default
+  * yum_package[httpd] action install[2015-01-19T07:42:17-05:00] INFO: Processing yum_package[httpd] action install (apache::default line 10)
+ (up to date)
+  * service[httpd] action enable[2015-01-19T07:42:19-05:00] INFO: Processing service[httpd] action enable (apache::default line 14)
+ (up to date)
+  * service[httpd] action start[2015-01-19T07:42:19-05:00] INFO: Processing service[httpd] action start (apache::default line 14)
+ (up to date)
+  * cookbook_file[/var/www/html/index.html] action create[2015-01-19T07:42:19-05:00] INFO: Processing cookbook_file[/var/www/html/index.html] action create (apache::default line 18)
+ (up to date)
+[2015-01-19T07:42:20-05:00] INFO: Chef Run complete in 3.990480318 seconds
+
+Running handlers:
+[2015-01-19T07:42:20-05:00] INFO: Running report handlers
+Running handlers complete
+[2015-01-19T07:42:20-05:00] INFO: Report handlers complete
+Chef Client finished, 0/4 resources updated in 6.269383448 seconds
+[2015-01-19T07:42:20-05:00] INFO: Sending resource update report (run-id: 84849493-7e2d-4abe-a9e5-12b811d115ff)
+
+
+=chef resources 
+
+eg, package, template and service
+
+Each resource may or may not have parameters, eg in the template owner, group and mode
+Each resource has an action eg, in the package, action :install
+Can send notifications from a resource, eg after configuring a template restart service
+
+=node
+
+Set of attributes stored in json file.
+Nodes are stored and indexed on chef server
+
+==list nodes
+
+bash-4.2$ knife node list
+node1
+
+==show node info
+
+bash-4.2$ knife node show node1
+Node Name:   node1
+Environment: _default
+FQDN:        centos63.example.com
+IP:          10.160.201.90
+Run List:    recipe[apache]
+Roles:       
+Recipes:     apache, apache::default
+Platform:    centos 6.4
+Tags:  
+
+==show raw node object
+
+bash-4.2$ knife node show node1 -Fj
+{
+  "name": "node1",
+  "chef_environment": "_default",
+  "run_list": [
+  "recipe[apache]"
+]
+,
+  "normal": {
+    "tags": [
+
+    ]
+  }
+}
+
+==show all node attributes
+
+bash-4.2$ knife node show node1 -l | less
+
+
+==show a specified node attribute
+
+bash-4.2$ knife node show node1 -a fqdn
+node1:
+  fqdn: centos63.example.com
+
+
+==search all nodes for an attribute
+
+bash-4.2$ knife search node "*:*" -a fqdn
+1 items found
+
+node1:
+  fqdn: centos63.example.com
+
+
+=Set attributes
+
+==create indexfile attribute
+
+bash-4.2$ pwd
+/home/quick/chef-repo/cookbooks/apache/attributes
+bash-4.2$ cat default.rb 
+default["apache"]["indexfile"]="index1.html"
+
+
+==create index1.html
+
+bash-4.2$ pwd
+/home/quick/chef-repo/cookbooks/apache/files/default
+bash-4.2$ cat index1.html 
+<html>
+<body>
+	<h1>Hello World Index 1</html>
+</body>
+</html>
+
+==update the source node in the recipe to use the attribute
+
+/home/quick/chef-repo/cookbooks/apache/recipes/default.rb
+
+cookbook_file "/var/www/html/index.html" do
+	source node["apache"]["indexfile"]            <------
+	mode "0644"
+end
+
+==upload the cookbook
+
+bash-4.2$ knife cookbook upload apache
+Uploading apache         [0.1.0]
+Uploaded 1 cookbook.
+
+==run chef-client on remote host
+
+[root@CentOS63 ~]# chef-client
+[2015-01-19T09:10:11-05:00] INFO: Forking chef instance to converge...
+Starting Chef Client, version 12.0.3
+[2015-01-19T09:10:11-05:00] INFO: *** Chef 12.0.3 ***
+[2015-01-19T09:10:11-05:00] INFO: Chef-client pid: 48550
+[2015-01-19T09:10:12-05:00] INFO: Run List is [recipe[apache]]
+[2015-01-19T09:10:12-05:00] INFO: Run List expands to [apache]
+[2015-01-19T09:10:12-05:00] INFO: Starting Chef Run for node1
+[2015-01-19T09:10:12-05:00] INFO: Running start handlers
+[2015-01-19T09:10:12-05:00] INFO: Start handlers complete.
+resolving cookbooks for run list: ["apache"]
+[2015-01-19T09:10:13-05:00] INFO: Loading cookbooks [apache@0.1.0]
+Synchronizing Cookbooks:
+[2015-01-19T09:10:13-05:00] INFO: Storing updated cookbooks/apache/attributes/default.rb in the cache.
+[2015-01-19T09:10:13-05:00] INFO: Storing updated cookbooks/apache/files/default/index1.html in the cache.
+[2015-01-19T09:10:13-05:00] INFO: Storing updated cookbooks/apache/recipes/default.rb in the cache.
+  - apache
+Compiling Cookbooks...
+Converging 3 resources
+Recipe: apache::default
+  * yum_package[httpd] action install[2015-01-19T09:10:13-05:00] INFO: Processing yum_package[httpd] action install (apache::default line 10)
+ (up to date)
+  * service[httpd] action enable[2015-01-19T09:10:16-05:00] INFO: Processing service[httpd] action enable (apache::default line 14)
+ (up to date)
+  * service[httpd] action start[2015-01-19T09:10:16-05:00] INFO: Processing service[httpd] action start (apache::default line 14)
+ (up to date)
+  * cookbook_file[/var/www/html/index.html] action create[2015-01-19T09:10:16-05:00] INFO: Processing cookbook_file[/var/www/html/index.html] action create (apache::default line 18)
+[2015-01-19T09:10:16-05:00] INFO: cookbook_file[/var/www/html/index.html] backed up to /var/chef/backup/var/www/html/index.html.chef-20150119091016.332362
+[2015-01-19T09:10:16-05:00] INFO: cookbook_file[/var/www/html/index.html] updated file contents /var/www/html/index.html
+
+    - update content in file /var/www/html/index.html from 6ba9ab to 042714
+    --- /var/www/html/index.html	2015-01-19 07:35:51.801773940 -0500
+    +++ /var/www/html/.index.html20150119-48550-15irq47	2015-01-19 09:10:16.329618829 -0500
+    @@ -1,6 +1,6 @@
+     <html>
+     <body>
+    -	<h1>Hello World</html>
+    +	<h1>Hello World Index 1</html>
+     </body>
+     </html>
+    - restore selinux security context
+[2015-01-19T09:10:17-05:00] INFO: Chef Run complete in 4.255323605 seconds
+
+Running handlers:
+[2015-01-19T09:10:17-05:00] INFO: Running report handlers
+Running handlers complete
+[2015-01-19T09:10:17-05:00] INFO: Report handlers complete
+Chef Client finished, 1/4 resources updated in 5.768851334 seconds
+[2015-01-19T09:10:17-05:00] INFO: Sending resource update report (run-id: c896356a-76be-46d1-af4d-8de51d056351)
+[root@CentOS63 ~]# 
+
+
+==Override the attribute by setting it in the recipe
+
+bash-4.2$ pwd
+/home/quick/chef-repo/cookbooks/apache/recipes
+bash-4.2$ cat default.rb 
+#
+# Cookbook Name:: apache
+# Recipe:: default
+#
+# Copyright 2015, YOUR_COMPANY_NAME
+#
+# All rights reserved - Do Not Redistribute
+#
+
+package "httpd" do
+	action :install
+end
+
+service "httpd" do
+	action [ :enable, :start ]
+end
+
+node.default["apache"]["indexfile"]="index2.html"	<--------------
+cookbook_file "/var/www/html/index.html" do
+	source node["apache"]["indexfile"]
+	mode "0644"
+end
+
+Create index2.html in /home/quick/chef-repo/cookbooks/apache/files/default
+
+bash-4.2$ knife cookbook upload apache
+Uploading apache         [0.1.0]
+Uploaded 1 cookbook.
+
+
+[root@CentOS63 ~]# chef-client
+[2015-01-19T09:18:44-05:00] INFO: Forking chef instance to converge...
+Starting Chef Client, version 12.0.3
+[2015-01-19T09:18:44-05:00] INFO: *** Chef 12.0.3 ***
+[2015-01-19T09:18:44-05:00] INFO: Chef-client pid: 48788
+[2015-01-19T09:18:46-05:00] INFO: Run List is [recipe[apache]]
+[2015-01-19T09:18:46-05:00] INFO: Run List expands to [apache]
+[2015-01-19T09:18:46-05:00] INFO: Starting Chef Run for node1
+[2015-01-19T09:18:46-05:00] INFO: Running start handlers
+[2015-01-19T09:18:46-05:00] INFO: Start handlers complete.
+resolving cookbooks for run list: ["apache"]
+[2015-01-19T09:18:46-05:00] INFO: Loading cookbooks [apache@0.1.0]
+Synchronizing Cookbooks:
+[2015-01-19T09:18:46-05:00] INFO: Storing updated cookbooks/apache/files/default/index2.html in the cache.
+[2015-01-19T09:18:46-05:00] INFO: Storing updated cookbooks/apache/recipes/default.rb in the cache.
+  - apache
+Compiling Cookbooks...
+Converging 3 resources
+Recipe: apache::default
+  * yum_package[httpd] action install[2015-01-19T09:18:46-05:00] INFO: Processing yum_package[httpd] action install (apache::default line 10)
+ (up to date)
+  * service[httpd] action enable[2015-01-19T09:18:49-05:00] INFO: Processing service[httpd] action enable (apache::default line 14)
+ (up to date)
+  * service[httpd] action start[2015-01-19T09:18:49-05:00] INFO: Processing service[httpd] action start (apache::default line 14)
+ (up to date)
+  * cookbook_file[/var/www/html/index.html] action create[2015-01-19T09:18:49-05:00] INFO: Processing cookbook_file[/var/www/html/index.html] action create (apache::default line 19)
+[2015-01-19T09:18:49-05:00] INFO: cookbook_file[/var/www/html/index.html] backed up to /var/chef/backup/var/www/html/index.html.chef-20150119091849.684326
+[2015-01-19T09:18:49-05:00] INFO: cookbook_file[/var/www/html/index.html] updated file contents /var/www/html/index.html
+
+    - update content in file /var/www/html/index.html from 042714 to 9c3eaa
+    --- /var/www/html/index.html	2015-01-19 09:10:16.329618829 -0500
+    +++ /var/www/html/.index.html20150119-48788-1m742gc	2015-01-19 09:18:49.681166002 -0500
+    @@ -1,6 +1,6 @@
+     <html>
+     <body>
+    -	<h1>Hello World Index 1</html>
+    +	<h1>Hello World Index 2</html>
+     </body>
+     </html>
+    - restore selinux security context
+[2015-01-19T09:18:50-05:00] INFO: Chef Run complete in 4.37397253 seconds
+
+Running handlers:
+[2015-01-19T09:18:50-05:00] INFO: Running report handlers
+Running handlers complete
+[2015-01-19T09:18:50-05:00] INFO: Report handlers complete
+Chef Client finished, 1/4 resources updated in 6.134612024 seconds
+[2015-01-19T09:18:50-05:00] INFO: Sending resource update report (run-id: f75efd7e-e77b-485b-84ff-143b815d591d)
+
+
+=motd
+
+== create cookbook for motd
+
+bash-4.2$ knife cookbook create motd
+** Creating cookbook motd in /home/quick/chef-repo/cookbooks
+** Creating README for cookbook: motd
+** Creating CHANGELOG for cookbook: motd
+** Creating metadata for cookbook: motd
+
+==create default attribute file
+
+bash-4.2$ pwd
+/home/quick/chef-repo/cookbooks/motd/attributes
+bash-4.2$ cat default.rb 
+default["motd"]["company"]="Chef"
+
+
+==create template for resource
+
+bash-4.2$ pwd
+/home/quick/chef-repo/cookbooks/motd/recipes
+bash-4.2$ cat default.rb 
+#
+# Cookbook Name:: motd
+# Recipe:: default
+#
+# Copyright 2015, YOUR_COMPANY_NAME
+#
+# All rights reserved - Do Not Redistribute
+#
+
+template "/etc/motd" do
+        source "motd.erb"
+        mode "0644"
+end
+
+
+==create the template
+
+erb stands for embedded ruby
+
+bash-4.2$ pwd
+/home/quick/chef-repo/cookbooks/motd/templates/default
+
+bash-4.2$ cat motd.erb 
+This service is property of <%= node["motd"]["company"] %>
+<%if node["pci"]["in_scope"] -%>
+This server is in-scope for PCI compliance
+<% end -%>
+
+==upload the motd cookbook
+
+bash-4.2$ pwd
+/home/quick/chef-repo
+bash-4.2$ knife cookbook upload motd
+Uploading motd           [0.1.0]
+Uploaded 1 cookbook.
+
+
+==create pci cookbook
+
+bash-4.2$ knife cookbook create pci
+** Creating cookbook pci in /home/quick/chef-repo/cookbooks
+** Creating README for cookbook: pci
+** Creating CHANGELOG for cookbook: pci
+** Creating metadata for cookbook: pci
+
+
+==add attribute
+
+bash-4.2$ pwd
+/home/quick/chef-repo
+bash-4.2$ cat /home/quick/chef-repo/cookbooks/pci/attributes/default.rb 
+default["pci"]["in_scope"]=true
+
+==upload pci cookbook
+
+bash-4.2$ knife cookbook upload pci
+Uploading pci            [0.1.0]
+Uploaded 1 cookbook.
+
+==add motd to runlist
+
+bash-4.2$ knife node run_list add node1 "recipe[motd]"
+node1:
+  run_list:
+    recipe[apache]
+    recipe[motd]
+
+==show the recipe in the runlist
+
+bash-4.2$ knife node show node1
+Node Name:   node1
+Environment: _default
+FQDN:        centos63.example.com
+IP:          10.160.201.90
+Run List:    recipe[apache], recipe[motd]
+Roles:       
+Recipes:     apache, apache::default
+Platform:    centos 6.4
+Tags:  
+
+==run chef-client on remote host
+
+This fails because we haven't added dependency on pci
+
+==add dependency in motd on pci
+
+bash-4.2$ pwd
+/home/quick/chef-repo/cookbooks/motd
+
+bash-4.2$ cat metadata.rb 
+name             'motd'
+maintainer       'YOUR_COMPANY_NAME'
+maintainer_email 'YOUR_EMAIL'
+license          'All rights reserved'
+description      'Installs/Configures motd'
+long_description IO.read(File.join(File.dirname(__FILE__), 'README.md'))
+version          '0.1.0'
+depends "pci"
+
+
+==upload the motd cookbook
+
+bash-4.2$ knife cookbook upload motd
+Uploading motd           [0.1.0]
+Uploaded 1 cookbook.
+
+
+==run chef-client on remote host
+
+[root@CentOS63 ~]# chef-client
+[2015-01-19T10:07:20-05:00] INFO: Forking chef instance to converge...
+Starting Chef Client, version 12.0.3
+[2015-01-19T10:07:20-05:00] INFO: *** Chef 12.0.3 ***
+[2015-01-19T10:07:20-05:00] INFO: Chef-client pid: 49360
+[2015-01-19T10:07:22-05:00] INFO: Run List is [recipe[apache], recipe[motd]]
+[2015-01-19T10:07:22-05:00] INFO: Run List expands to [apache, motd]
+[2015-01-19T10:07:22-05:00] INFO: Starting Chef Run for node1
+[2015-01-19T10:07:22-05:00] INFO: Running start handlers
+[2015-01-19T10:07:22-05:00] INFO: Start handlers complete.
+resolving cookbooks for run list: ["apache", "motd"]
+[2015-01-19T10:07:23-05:00] INFO: Loading cookbooks [apache@0.1.0, motd@0.1.0, pci@0.1.0]
+Synchronizing Cookbooks:
+  - apache
+[2015-01-19T10:07:23-05:00] INFO: Storing updated cookbooks/pci/attributes/default.rb in the cache.
+[2015-01-19T10:07:23-05:00] INFO: Storing updated cookbooks/pci/metadata.rb in the cache.
+[2015-01-19T10:07:23-05:00] INFO: Storing updated cookbooks/pci/recipes/default.rb in the cache.
+[2015-01-19T10:07:23-05:00] INFO: Storing updated cookbooks/pci/CHANGELOG.md in the cache.
+[2015-01-19T10:07:23-05:00] INFO: Storing updated cookbooks/pci/README.md in the cache.
+  - pci
+[2015-01-19T10:07:23-05:00] INFO: Storing updated cookbooks/motd/metadata.rb in the cache.
+  - motd
+Compiling Cookbooks...
+Converging 4 resources
+Recipe: apache::default
+  * yum_package[httpd] action install[2015-01-19T10:07:23-05:00] INFO: Processing yum_package[httpd] action install (apache::default line 10)
+ (up to date)
+  * service[httpd] action enable[2015-01-19T10:07:26-05:00] INFO: Processing service[httpd] action enable (apache::default line 14)
+ (up to date)
+  * service[httpd] action start[2015-01-19T10:07:26-05:00] INFO: Processing service[httpd] action start (apache::default line 14)
+ (up to date)
+  * cookbook_file[/var/www/html/index.html] action create[2015-01-19T10:07:26-05:00] INFO: Processing cookbook_file[/var/www/html/index.html] action create (apache::default line 19)
+ (up to date)
+Recipe: motd::default
+  * template[/etc/motd] action create[2015-01-19T10:07:26-05:00] INFO: Processing template[/etc/motd] action create (motd::default line 10)
+[2015-01-19T10:07:26-05:00] INFO: template[/etc/motd] backed up to /var/chef/backup/etc/motd.chef-20150119100726.663259
+[2015-01-19T10:07:26-05:00] INFO: template[/etc/motd] updated file contents /etc/motd
+
+    - update content in file /etc/motd from b676c2 to c5ee28
+    (current file is binary, diff output suppressed)[2015-01-19T10:07:26-05:00] INFO: template[/etc/motd] mode changed to 644
+
+    - change mode from '0664' to '0644'
+    - restore selinux security context
+[2015-01-19T10:07:27-05:00] INFO: Chef Run complete in 4.83769348 seconds
+
+Running handlers:
+[2015-01-19T10:07:27-05:00] INFO: Running report handlers
+Running handlers complete
+[2015-01-19T10:07:27-05:00] INFO: Report handlers complete
+Chef Client finished, 1/5 resources updated in 6.479206181 seconds
+[2015-01-19T10:07:27-05:00] INFO: Sending resource update report (run-id: 92d070b5-6d3f-4f35-b2fd-318246dc8509)
+
+==show test node's pci attribute
+
+bash-4.2$ knife search node "pci:*" -a pci
+1 items found
+
+node1:
+  pci:
+    in_scope: true
+
+==change pci attribute to false
+
+bash-4.2$ cat cookbooks/pci/attributes/default.rb 
+default["pci"]["in_scope"]=false
+
+==upload change
+
+bash-4.2$ knife cookbook upload pci
+Uploading pci            [0.1.0]
+Uploaded 1 cookbook.
+
+==run chef-client
+
+[root@CentOS63 chef]# chef-client
+[2015-01-19T10:15:43-05:00] INFO: Forking chef instance to converge...
+Starting Chef Client, version 12.0.3
+[2015-01-19T10:15:43-05:00] INFO: *** Chef 12.0.3 ***
+[2015-01-19T10:15:43-05:00] INFO: Chef-client pid: 49647
+[2015-01-19T10:15:45-05:00] INFO: Run List is [recipe[apache], recipe[motd]]
+[2015-01-19T10:15:45-05:00] INFO: Run List expands to [apache, motd]
+[2015-01-19T10:15:45-05:00] INFO: Starting Chef Run for node1
+[2015-01-19T10:15:45-05:00] INFO: Running start handlers
+[2015-01-19T10:15:45-05:00] INFO: Start handlers complete.
+resolving cookbooks for run list: ["apache", "motd"]
+[2015-01-19T10:15:47-05:00] INFO: Loading cookbooks [apache@0.1.0, motd@0.1.0, pci@0.1.0]
+Synchronizing Cookbooks:
+  - motd
+  - apache
+[2015-01-19T10:15:47-05:00] INFO: Storing updated cookbooks/pci/attributes/default.rb in the cache.
+  - pci
+Compiling Cookbooks...
+Converging 4 resources
+Recipe: apache::default
+  * yum_package[httpd] action install[2015-01-19T10:15:47-05:00] INFO: Processing yum_package[httpd] action install (apache::default line 10)
+ (up to date)
+  * service[httpd] action enable[2015-01-19T10:15:49-05:00] INFO: Processing service[httpd] action enable (apache::default line 14)
+ (up to date)
+  * service[httpd] action start[2015-01-19T10:15:49-05:00] INFO: Processing service[httpd] action start (apache::default line 14)
+ (up to date)
+  * cookbook_file[/var/www/html/index.html] action create[2015-01-19T10:15:50-05:00] INFO: Processing cookbook_file[/var/www/html/index.html] action create (apache::default line 19)
+ (up to date)
+Recipe: motd::default
+  * template[/etc/motd] action create[2015-01-19T10:15:50-05:00] INFO: Processing template[/etc/motd] action create (motd::default line 10)
+[2015-01-19T10:15:50-05:00] INFO: template[/etc/motd] backed up to /var/chef/backup/etc/motd.chef-20150119101550.031547
+[2015-01-19T10:15:50-05:00] INFO: template[/etc/motd] updated file contents /etc/motd
+
+    - update content in file /etc/motd from c5ee28 to b9190a
+    --- /etc/motd	2015-01-19 10:07:26.661925642 -0500
+    +++ /tmp/chef-rendered-template20150119-49647-rw0qmq	2015-01-19 10:15:50.029483322 -0500
+    @@ -1,3 +1,2 @@
+     This service is property of Chef
+    -This server is in-scope for PCI compliance
+    - restore selinux security context
+[2015-01-19T10:15:51-05:00] INFO: Chef Run complete in 5.771173253 seconds
+
+Running handlers:
+[2015-01-19T10:15:51-05:00] INFO: Running report handlers
+Running handlers complete
+[2015-01-19T10:15:51-05:00] INFO: Report handlers complete
+Chef Client finished, 1/5 resources updated in 7.497605779 seconds
+[2015-01-19T10:15:51-05:00] INFO: Sending resource update report (run-id: 7b37584c-36a5-47ee-ae56-9321a073f174)
+
+==show pci attribute again
+
+bash-4.2$ knife search node "pci:*" -a pci
+1 items found
+
+node1:
+  pci:
+    in_scope: false
+
+=Apache cookbook
+
+==change the version in 
+
+bash-4.2$ cat /home/quick/chef-repo/cookbooks/apache/metadata.rb 
+name             'apache'
+maintainer       'YOUR_COMPANY_NAME'
+maintainer_email 'YOUR_EMAIL'
+license          'All rights reserved'
+description      'Installs/Configures apache'
+long_description IO.read(File.join(File.dirname(__FILE__), 'README.md'))
+version          '0.2.0'		<---------
+
+
+==add 2 more attributes
+
+bash-4.2$ pwd
+/home/quick/chef-repo/cookbooks/apache/attributes
+bash-4.2$ cat default.rb 
+default["apache"]["indexfile"]="index1.html"
+default["apache"]["sites"]["clowns"]={"port"=>80}
+default["apache"]["sites"]["bears"]={"port"=>81}
+
+==update /home/quick/chef-repo/cookbooks/apache/recipes/default.rb
+
+package "httpd" do
+  action :install
+end
+
+execute "mv /etc/httpd/conf.d/welcome.conf /etc/httpd/conf.d/welcome.conf.disabled" do
+  only_if do
+    File.exist?("/etc/httpd/conf.d/welcome.conf")
+  end
+  notifies :restart, "service[httpd]"
+end
+
+node["apache"]["sites"].each do |site_name, site_data|
+  document_root = "/srv/apache/#{site_name}"
+
+  template "/etc/httpd/conf.d/#{site_name}.conf" do
+    source "custom.erb"
+    mode "0644"
+    variables(
+      :document_root => document_root,
+      :port => site_data["port"]
+    )
+    notifies :restart, "service[httpd]"
+  end
+
+  directory document_root do
+    mode "0755"
+    recursive true
+  end
+
+  template "#{document_root}/index.html" do
+    source "index.html.erb"
+    mode "0644"
+    variables(
+      :site_name => site_name,
+      :port => site_data["port"]
+    )
+  end
+end
+
+service "httpd" do
+  action [ :enable, :start ]
+end
+
+== Add cutom.erb to /home/quick/chef-repo/cookbooks/apache/templates/default
+
+bash-4.2$ cat custom.erb 
+<% if @port != 80 -%>
+Listen <%= @port %>
+<% end -%>
+ 
+<VirtualHost *:<%= @port %>>
+ServerAdmin webmaster@localhost
+ 
+DocumentRoot <%= @document_root %>
+<Directory />
+Options FollowSymLinks
+AllowOverride None
+</Directory>
+<Directory <%= @document_root %>>
+Options Indexes FollowSymLinks MultiViews
+AllowOverride None
+Order allow,deny
+allow from all
+</Directory>
+</VirtualHost> 
+
+
+== Add index.html.erb to /home/quick/chef-repo/cookbooks/apache/templates/default
+
+bash-4.2$ cat index.html.erb 
+<html>
+  <body>
+    <h1>Welcome to <%= node["motd"]["company"] %></h1>
+    <h2>We love <%= @site_name %></h2>
+    <%= node["ipaddress"] %>:<%= @port %>
+  </body>
+</html>
+
+==upload apache cookbook
+
+bash-4.2$ knife cookbook upload apache
+Uploading apache         [0.2.0]
+Uploaded 1 cookbook.
+
+

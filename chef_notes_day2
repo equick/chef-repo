@@ -1,0 +1,758 @@
+= Search
+
+Chef search uses Solr key:search pattern syntax
+
+==search all nodes
+
+returns all node info for matches
+
+knife search node "ipaddress:10.20.30.40"
+knife search node "ipaddress:10.*"
+knife search node "platfo*:ubuntu"
+
+bash-4.2$ knife search node "platfo*:centos"
+1 items found
+
+Node Name:   node1
+Environment: _default
+FQDN:        centos63.example.com
+IP:          10.160.201.90
+Run List:    recipe[apache], recipe[motd]
+Roles:       
+Recipes:     apache, motd, apache::ip-logger, apache::default, motd::default
+Platform:    centos 6.4
+Tags:        
+
+
+question mark replaces single char
+knife search node "ipaddress:12.?"
+
+==find an attribute value
+
+just return the attribute value for the matches
+
+knife search node "*:*" -a ipaddress
+knife search node "ipaddress:10.*" -a ipaddress
+
+
+==search from within a recipe
+
+search("node","role:webserver").each do |webserver|
+..
+end
+
+==add ip-logger search to apache cookbook
+
+bash-4.2$ cat /home/quick/chef-repo/cookbooks/apache/recipes/ip-logger.rb
+search("node","platform:centos").each do |server|
+	log "The CentOS servers in your org have the following FQDN/IP Addresses:- #{server["fqdn"]}/#{server["ipaddress"]}"
+end
+
+bash-4.2$ knife cookbook upload apache
+Uploading apache         [0.2.0]
+Uploaded 1 cookbook.
+
+bash-4.2$ knife node run_list add node1 'recipe[apache::ip-logger]'
+node1:
+  run_list:
+    recipe[apache]
+    recipe[motd]
+    recipe[apache::ip-logger]
+
+Now run chef-client on remote host
+
+Recipe: apache::ip-logger
+  * log[The CentOS servers in your org have the following FQDN/IP Addresses:- centos63.example.com/10.160.201.90] action write[2015-01-20T04:47:34-05:00] INFO: Processing log[The CentOS servers in your org have the following FQDN/IP Addresses:- centos63.example.com/10.160.201.90] action write (apache::ip-logger line 2)
+[2015-01-20T04:47:34-05:00] INFO: The CentOS servers in your org have the following FQDN/IP Addresses:- centos63.example.com/10.160.201.90
+
+
+==remove ip-logger recipe
+
+bash-4.2$ knife node run_list remove node1 'recipe[apache::ip-logger]'
+node1:
+  run_list:
+    recipe[apache]
+    recipe[motd]
+
+
+= data bags
+
+==create a data bag named users
+
+bash-4.2$ pwd
+/home/quick/chef-repo
+bash-4.2$ mkdir -p data_bags/users
+bash-4.2$ pwd
+/home/quick/chef-repo
+bash-4.2$ knife data_bag create users
+Created data_bag[users]
+
+bash-4.2$ cdc
+bash-4.2$ cat data_bags/users/bobo.json 
+{
+	"id": "bobo",
+	"comment": "Bobo T. Clown",
+	"uid": 2000,
+	"gid": 0,
+	"home": "/home/bobo",
+	"shell": "/bin/bash"
+}
+
+== create the data bag item
+
+bash-4.2$ knife data_bag from file users bobo.json
+Updated data_bag_item[users::bobo]
+
+bash-4.2$ knife data_bag from file users frank.json
+Updated data_bag_item[users::frank]
+
+==search users
+
+bash-4.2$ knife search users "*:*"
+2 items found
+
+chef_type: data_bag_item
+comment:   Frank Belson
+data_bag:  users
+gid:       0
+home:      /home/frank
+id:        frank
+shell:     /bin/bash
+uid:       2001
+
+chef_type: data_bag_item
+comment:   Bobo T. Clown
+data_bag:  users
+gid:       0
+home:      /home/bobo
+id:        bobo
+shell:     /bin/bash
+uid:       2000
+
+==find bobo's shell
+
+bash-4.2$ knife search users "id:bobo" -a shell
+1 items found
+
+:
+  shell: /bin/bash
+
+
+==create groups
+
+bash-4.2$ pwd
+/home/quick/chef-repo
+bash-4.2$ mkdir data_bags/groups
+bash-4.2$ knife data_bag create groups
+Created data_bag[groups]
+
+bash-4.2$ cat data_bags/groups/clowns.json
+{
+	"id": "clowns",
+	"gid": 3000,
+	"members": [ "bobo", "frank" ]
+}
+
+bash-4.2$ pwd
+/home/quick/chef-repo
+bash-4.2$ knife data_bag from file groups clowns.json
+Updated data_bag_item[groups::clowns]
+
+==search groups
+
+bash-4.2$ knife search groups "*:*"
+1 items found
+
+chef_type: data_bag_item
+data_bag:  groups
+gid:       3000
+id:        clowns
+members:
+  bobo
+  frank
+
+== create users cookbook
+
+bash-4.2$ pwd
+/home/quick/chef-repo
+bash-4.2$ knife cookbook create users
+** Creating cookbook users in /home/quick/chef-repo/cookbooks
+** Creating README for cookbook: users
+** Creating CHANGELOG for cookbook: users
+** Creating metadata for cookbook: users
+
+==user recipe
+
+bash-4.2$ cat /home/quick/chef-repo/cookbooks/users/recipes/default.rb
+#
+# Cookbook Name:: users
+# Recipe:: default
+#
+# Copyright 2015, YOUR_COMPANY_NAME
+#
+# All rights reserved - Do Not Redistribute
+#
+search(:users,"*:*").each do |user_data|
+	user user_data["id"] do
+		comment user_data["comment"]
+		uid user_data["uid"]
+		gid user_data["gid"]
+		home user_data["home"]
+		shell user_data["shell"]
+	end
+end
+include_recipe "users::groups"
+
+==group recipe
+
+bash-4.2$ cat /home/quick/chef-repo/cookbooks/users/recipes/groups.rb 
+#
+# Cookbook Name:: users
+# Recipe:: default
+#
+# Copyright 2015, YOUR_COMPANY_NAME
+#
+# All rights reserved - Do Not Redistribute
+#
+search(:groups,"*:*").each do |group_data|
+	group group_data["id"] do
+		gid group_data["gid"]
+		members group_data["members"]
+	end
+end
+
+
+==check syntax
+
+bash-4.2$ knife cookbook test users
+checking users
+Running syntax check on users
+Validating ruby files
+Validating templates
+
+==upload users cookbook
+
+bash-4.2$ knife cookbook upload users
+Uploading users          [0.1.0]
+Uploaded 1 cookbook.
+bash-4.2$ knife node run_list add node1 'recipe[users]'
+node1:
+  run_list:
+    recipe[apache]
+    recipe[motd]
+    recipe[users]
+
+
+==run chef-client on remote host
+
+  * user[frank] action create[2015-01-20T06:06:12-05:00] INFO: Processing user[frank] action create (users::default line 10)
+[2015-01-20T06:06:13-05:00] INFO: user[frank] created
+
+    - create user frank
+  * user[bobo] action create[2015-01-20T06:06:13-05:00] INFO: Processing user[bobo] action create (users::default line 10)
+[2015-01-20T06:06:14-05:00] INFO: user[bobo] created
+
+    - create user bobo
+Recipe: users::groups
+  * group[clowns] action create[2015-01-20T06:06:14-05:00] INFO: Processing group[clowns] action create (users::groups line 10)
+[2015-01-20T06:06:14-05:00] INFO: group[clowns] created
+
+    - create group[clowns]
+[2015-01-20T06:06:14-05:00] INFO: Chef Run complete in 10.347832121 seconds
+
+
+=Roles
+
+==create role webserver
+
+bash-4.2$ cat roles/webserver.rb 
+name "webserver"
+description "Web Server"
+run_list "recipe[apache]"
+default_attributes({
+  "apache" => {
+	"sites" => {
+		"admin" => {
+			"port" => 8000
+		}
+	}
+  }
+})
+
+bash-4.2$ knife role from file webserver.rb
+Updated Role webserver!
+
+==show the role info for webserver
+
+bash-4.2$ knife role show webserver
+chef_type:           role
+default_attributes:
+  apache:
+    sites:
+      admin:
+        port: 8000
+description:         Web Server
+env_run_lists:
+json_class:          Chef::Role
+name:                webserver
+override_attributes:
+run_list:            recipe[apache]
+
+
+==search for roles with the apache recipe in their runlists
+
+bash-4.2$ knife search role "run_list:recipe\[apache\]"
+1 items found
+
+chef_type:           role
+default_attributes:
+  apache:
+    sites:
+      admin:
+        port: 8000
+description:         Web Server
+env_run_lists:
+json_class:          Chef::Role
+name:                webserver
+override_attributes:
+run_list:            recipe[apache]
+
+
+==remove apache from runlist
+
+done from chef server gui
+
+==run chef-client
+
+[root@CentOS63 chef]# chef-client
+[2015-01-20T06:34:15-05:00] INFO: Forking chef instance to converge...
+Starting Chef Client, version 12.0.3
+[2015-01-20T06:34:15-05:00] INFO: *** Chef 12.0.3 ***
+[2015-01-20T06:34:15-05:00] INFO: Chef-client pid: 54506
+[2015-01-20T06:34:17-05:00] INFO: Run List is [role[webserver], recipe[motd]]		<------
+[2015-01-20T06:34:17-05:00] INFO: Run List expands to [apache, motd]
+[2015-01-20T06:34:17-05:00] INFO: Starting Chef Run for node1
+[2015-01-20T06:34:17-05:00] INFO: Running start handlers
+[2015-01-20T06:34:17-05:00] INFO: Start handlers complete.
+
+
+==display apache.sites attribute from all nodes with webserver role
+
+bash-4.2$ knife search node "role:webserver" -a apache.sites
+1 items found
+
+node1:
+  apache.sites:
+    admin:
+      port: 8000
+    bears:
+      port: 81
+    clowns:
+      port: 80
+
+
+==update the port from 8000 to 8001
+
+bash-4.2$ cat roles/webserver.rb
+name "webserver"
+description "Web Server"
+run_list "recipe[apache]"
+default_attributes({
+  "apache" => {
+	"sites" => {
+		"admin" => {
+			"port" => 8001
+		}
+	}
+  }
+})
+
+bash-4.2$ knife role from file webserver.rb
+Updated Role webserver!
+
+==run chef-client again
+
+    - update content in file /srv/apache/admin/index.html from 3bb755 to 01481f
+    --- /srv/apache/admin/index.html	2015-01-20 06:34:24.727175502 -0500
+    +++ /tmp/chef-rendered-template20150120-54793-x55e02	2015-01-20 06:41:23.421417734 -0500
+    @@ -2,7 +2,7 @@
+       <body>
+         <h1>Welcome to Chef</h1>
+         <h2>We love admin</h2>
+    -    10.160.201.90:8000
+    +    10.160.201.90:8001
+       </body>
+     </html>
+    - restore selinux security context
+
+
+==Create base role and update
+
+bash-4.2$ cat roles/base.rb 
+name "base"
+description "Base Server Role"
+run_list "recipe[motd]", "recipe[users]"
+
+bash-4.2$ knife role from file base.rb
+Updated Role base!
+
+
+== Nest the role in the webserver role
+
+bash-4.2$ cat roles/webserver.rb 
+name "webserver"
+description "Web Server"
+run_list "role[base]","recipe[apache]"
+default_attributes({
+  "apache" => {
+	"sites" => {
+		"admin" => {
+			"port" => 8000
+		},
+		"bears" => {
+                        "port" => 8081
+                }
+	}
+  }
+})
+
+
+bash-4.2$ knife role from file webserver.rb
+Updated Role webserver!
+
+
+=Environments
+
+==Use knife to show the available cookbook versions
+
+bash-4.2$ knife cookbook show apache
+apache   0.2.0  0.1.0
+
+==List different environments
+
+bash-4.2$ knife environment list
+_default
+
+
+==Make environment
+
+bash-4.2$ mkdir environments
+
+bash-4.2$ pwd
+/home/quick/chef-repo
+
+bash-4.2$ cat environments/dev.rb
+name "dev"
+description "For developers!"
+cookbook "apache", "= 0.2.0"
+
+bash-4.2$ knife environment from file dev.rb
+Updated Environment dev
+
+bash-4.2$ knife environment show dev
+chef_type:           environment
+cookbook_versions:
+  apache: = 0.2.0
+default_attributes:
+description:         For developers!
+json_class:          Chef::Environment
+name:                dev
+override_attributes:
+
+
+==change the environment for node1 to dev (in the GUI)
+
+==run chef-client on node1
+
+==create production environment
+
+bash-4.2$ cat environments/production.rb 
+name "production"
+description "For Prods!"
+cookbook "apache", "= 0.1.0"
+override_attributes({
+	"pci" => {
+		"in_scope" => true
+	}
+})
+
+
+bash-4.2$ knife environment from file production.rb
+Updated Environment production
+
+==change the environment for node1 to production (in the GUI)
+
+==run chef-client on node1 again
+
+This updates the motd
+
+[2015-01-20T08:35:00-05:00] INFO: template[/etc/motd] updated file contents /etc/motd
+
+    - update content in file /etc/motd from b9190a to c5ee28
+    --- /etc/motd	2015-01-19 10:15:50.029483322 -0500
+    +++ /tmp/chef-rendered-template20150120-56469-1v2l6ak	2015-01-20 08:35:00.746372465 -0500
+    @@ -1,2 +1,3 @@
+     This service is property of Chef
+    +This server is in-scope for PCI compliance
+    - restore selinux security context
+
+
+and changes the index page
+
+
+=Chef Supermarket
+
+==search chef-client cookbook
+
+bash-4.2$ knife cookbook site search chef-client
+chef:
+  cookbook:             https://supermarket.chef.io/api/v1/cookbooks/chef
+  cookbook_description: Installs and configures Chef for chef-client and chef-server
+  cookbook_maintainer:  chef
+  cookbook_name:        chef
+chef-client:
+  cookbook:             https://supermarket.chef.io/api/v1/cookbooks/chef-client
+  cookbook_description: Manages client.rb configuration and chef-client service
+  cookbook_maintainer:  chef
+  cookbook_name:        chef-client
+chef-client-cron:
+  cookbook:             https://supermarket.chef.io/api/v1/cookbooks/chef-client-cron
+  cookbook_description: Manages aspects of only chef-client
+  cookbook_maintainer:  bryanwb
+  cookbook_name:        chef-client-cron
+..
+..
+
+==show the chef-client cookbook
+
+bash-4.2$ knife cookbook site show chef-client
+average_rating:     
+category:           Other
+created_at:         2010-12-16T23:00:45.000Z
+deprecated:         false
+description:        Manages client.rb configuration and chef-client service
+external_url:       http://github.com/opscode-cookbooks/chef-client
+foodcritic_failure: true
+issues_url:         
+
+latest_version:     https://supermarket.chef.io/api/v1/cookbooks/chef-client/versions/4.0.0
+maintainer:         chef
+metrics:
+  downloads:
+    total:    33006764
+    versions:
+      0.99.0: 739414
+      0.99.1: 739420
+      0.99.2: 739439
+
+
+==download the chef-client cookbook
+
+bash-4.2$ knife cookbook site download chef-client
+Downloading chef-client from the cookbooks site at version 4.0.0 to /home/quick/chef-repo/chef-client-4.0.0.tar.gz
+Cookbook saved: /home/quick/chef-repo/chef-client-4.0.0.tar.gz
+
+==remove validation key
+
+When bootstrapping a node it installs a validation key, that connects to the chef server and gets the client key. From that point we don't need the validation key and it can be deleted.
+
+So we are going to delete the validationkey using the following recipe
+
+bash-4.2$ cat cookbooks/chef-client/recipes/delete_validation.rb
+
+class ::Chef::Recipe
+  include ::Opscode::ChefClient::Helpers
+end
+
+unless chef_server?
+  file Chef::Config[:validation_key] do
+    action :delete
+    backup false
+    only_if { ::File.exists?(Chef::Config[:client_key]) }
+  end
+end
+
+== Add this recipe to the base.rb
+
+bash-4.2$ pwd
+/home/quick/chef-repo
+bash-4.2$ cat roles/base.rb 
+name "base"
+description "Base Server Role"
+run_list "recipe[chef-client::delete_validation]", "recipe[motd]", "recipe[users]"
+
+==Get chef-client cookbook dependencies and upload
+
+bash-4.2$ knife cookbook site download cron
+Downloading cron from the cookbooks site at version 1.6.1 to /home/quick/chef-repo/cron-1.6.1.tar.gz
+Cookbook saved: /home/quick/chef-repo/cron-1.6.1.tar.gz
+bash-4.2$ knife cookbook site download logrotate
+Downloading logrotate from the cookbooks site at version 1.7.0 to /home/quick/chef-repo/logrotate-1.7.0.tar.gz
+Cookbook saved: /home/quick/chef-repo/logrotate-1.7.0.tar.gz
+bash-4.2$ knife cookbook site download windows
+Downloading windows from the cookbooks site at version 1.36.1 to /home/quick/chef-repo/windows-1.36.1.tar.gz
+Cookbook saved: /home/quick/chef-repo/windows-1.36.1.tar.gz
+bash-4.2$ knife cookbook site download chef_handler
+Downloading chef_handler from the cookbooks site at version 1.1.6 to /home/quick/chef-repo/chef_handler-1.1.6.tar.gz
+Cookbook saved: /home/quick/chef-repo/chef_handler-1.1.6.tar.gz
+
+
+bash-4.2$ knife cookbook upload cron
+Uploading cron           [1.6.1]
+Uploaded 1 cookbook.
+bash-4.2$ knife cookbook upload logrotate
+Uploading logrotate      [1.7.0]
+Uploaded 1 cookbook.
+bash-4.2$ knife cookbook upload chef_handler
+Uploading chef_handler   [1.1.6]
+Uploaded 1 cookbook.
+bash-4.2$ knife cookbook upload windows
+Uploading windows        [1.36.1]
+Uploaded 1 cookbook.
+bash-4.2$ knife cookbook upload chef-client
+Uploading chef-client    [4.0.0]
+Uploaded 1 cookbook.
+
+==upload the role
+
+bash-4.2$ knife role from file roles/base.rb 
+Updated Role base!
+
+==run chef-client
+
+Now there is a process running which calls back to the chef server every 30 minutes and has a splay of 300 seconds
+
+[root@CentOS63 chef]# ps -ef | grep chef-client
+root     57563     1  0 09:42 ?        00:00:00 /opt/chef/embedded/bin/ruby /usr/bin/chef-client -d -c /etc/chef/client.rb -L /var/log/chef/client.log -P /var/run/chef/client.pid -i 1800 -s 300
+
+The validation.pem has now gone
+
+[root@CentOS63 chef]# ls -l /etc/chef/
+total 12
+-rw-------. 1 root root 1675 Jan 19 07:33 client.pem
+-rw-r--r--. 1 root root  163 Jan 19 07:34 client.rb
+-rw-r--r--. 1 root root   16 Jan 19 07:33 first-boot.json
+
+
+==ntp cookbook
+
+bash-4.2$ knife cookbook site download ntp
+Downloading ntp from the cookbooks site at version 1.7.0 to /home/quick/chef-repo/ntp-1.7.0.tar.gz
+Cookbook saved: /home/quick/chef-repo/ntp-1.7.0.tar.gz
+
+bash-4.2$ cd cookbooks
+bash-4.2$ tar -zxvf /home/quick/chef-repo/ntp-1.7.0.tar.gz
+ntp/README.md
+ntp/CHANGELOG.md
+ntp/metadata.json
+ntp/attributes/default.rb
+ntp/files/default
+ntp/files/default/ntp.ini
+ntp/files/default/ntp.leapseconds
+ntp/files/default/tests
+ntp/files/default/tests/minitest
+ntp/files/default/tests/minitest/default_test.rb
+ntp/files/default/tests/minitest/support
+ntp/files/default/tests/minitest/support/helpers.rb
+ntp/files/default/tests/minitest/undo_test.rb
+ntp/files/default/usr.sbin.ntpd.apparmor
+ntp/files/ubuntu-10
+ntp/files/ubuntu-10/usr.sbin.ntpd.apparmor
+ntp/libraries/ntp_helper.rb
+ntp/recipes/apparmor.rb
+ntp/recipes/default.rb
+ntp/recipes/undo.rb
+ntp/recipes/windows_client.rb
+ntp/templates/default
+ntp/templates/default/ntp.conf.erb
+
+bash-4.2$ cdc
+bash-4.2$ knife cookbook upload ntp
+Uploading ntp            [1.7.0]
+Uploaded 1 cookbook.
+
+bash-4.2$ cat roles/base.rb 
+name "base"
+description "Base Server Role"
+run_list "recipe[chef-client::delete_validation]", "recipe[chef-client]", "recipe[ntp]", "recipe[motd]", "recipe[users]"
+
+bash-4.2$ knife role from file roles/base.rb 
+Updated Role base!
+
+
+=berks
+
+bash-4.2$ cd cookbooks/apache/
+bash-4.2$ berks init .
+      create  Berksfile
+      create  Thorfile
+      create  chefignore
+      create  .gitignore
+      create  Gemfile
+      create  .kitchen.yml
+      append  Thorfile
+      create  test/integration/default
+      append  .gitignore
+      append  .gitignore
+      append  Gemfile
+      append  Gemfile
+You must run `bundle install' to fetch any new gems.
+      create  Vagrantfile
+Successfully initialized
+
+
+bash-4.2$ berks install
+Resolving cookbook dependencies...
+Fetching 'apache' from source at .
+Fetching cookbook index from https://supermarket.getchef.com...
+Using apache (0.2.0) from source at .
+
+bash-4.2$ berks upload
+Uploaded apache (0.2.0) to: 'https://api.opscode.com:443/organizations/quick'
+
+=chef status
+
+=chef support
+
+http://www.chef.io/support
+Email: support@chef.io (severity 3)
+
+http://www.chef.io/support
+
+=chef provisioning
+
+create machines via AWS, and bootstrap and converge the node via chef
+
+chef-provision
+
+=Further resources
+
+http://foodfightshow.org
+
+
+
+=workflow
+
+==linting - testing syntax
+
+==automate 
+
+set up jenkins to check for git upload and run tests using chef-spec and server-spec
+
+==kitchen test and chef-zero
+
+what system to provision
+.kitchen.yaml
+
+dirver vagrant
+platform ubuntu/centos
+
+kitchen converge
+spins up 2 boxes
+installs the client
+and runs the recipe
+
+
+
+
+
