@@ -1,0 +1,19 @@
+# Systemd unit file for <%= @instance %> tomcat instance.
+
+[Unit]
+Description=<%= @instance %> Apache Tomcat Web Application Container
+After=syslog.target network.target
+
+[Service]
+Type=simple
+Environment="NAME=%I"
+EnvironmentFile=<%= @config_dir %>/tomcat.conf
+ExecStart=/usr/libexec/tomcat/server start
+ExecStop=/usr/libexec/tomcat/server stop
+SuccessExitStatus=143
+User=<%= @user %>
+Group=<%= @group %>
+
+[Install]
+WantedBy=multi-user.target
+
