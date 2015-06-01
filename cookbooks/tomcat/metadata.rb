@@ -8,14 +8,9 @@ version          '0.17.3'
 
 depends 'java'
 depends 'openssl'
-depends 'yum-epel'
 
-supports 'debian'
-supports 'ubuntu'
 supports 'centos'
 supports 'redhat'
-supports 'amazon'
-supports 'scientific'
 
 recipe 'tomcat::default', 'Installs and configures Tomcat'
 recipe 'tomcat::users', 'Setup users and roles for Tomcat'

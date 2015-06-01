@@ -54,6 +54,24 @@ action :configure do
       end
     end
 
+    remote_directory "#{new_resource.webapp_dir}/manager" do 
+      source "manager" do
+        mode '0755'
+        recursive true
+        owner "#{new_resource.user}"
+        group "#{new_resource.group}"
+      end
+    end
+
+    remote_directory "#{new_resource.webapp_dir}/probe" do
+      source "probe" do
+        mode '0755'
+        recursive true
+        owner "#{new_resource.user}"
+        group "#{new_resource.group}"
+      end
+    end
+
     # Don't make a separate home, just link to base
     #if new_resource.home != new_resource.base
     #  link "#{new_resource.home}" do
