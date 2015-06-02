@@ -137,6 +137,18 @@ action :configure do
     new_resource.java_options = java_options
   end
 
+  template "#{new_resource.config_dir}/tomcat-users.xml" do
+    source 'tomcat-users.xml.erb'
+    owner 'root'
+    group 'root'
+    mode '0644'
+    variables(
+      :users => TomcatCookbook.users,
+      :roles => TomcatCookbook.roles,
+    )
+    notifies :restart, "service[#{instance}]"
+  end
+
   case node['platform_family']
   when 'rhel', 'fedora'
     template "#{new_resource.config_dir}/tomcat.conf" do
